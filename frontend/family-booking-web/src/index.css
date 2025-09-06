@@ -1,0 +1,28 @@
+:root { color-scheme: light; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+body { margin: 0; }
+input, textarea, button { width: auto; padding: 8px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+button { cursor: pointer; font-weight: 600; }
+button[disabled] { opacity: .6; cursor: not-allowed; }
+label { display: grid; gap: 6px; font-weight: 600; }
+table th, table td { padding: 6px 8px; }
+
+.status-select {
+  padding: 8px 36px 8px 12px;
+  border: 1px solid #cfd2d6;
+  border-radius: 8px;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  appearance: none;              /* hide native arrow */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23555' d='M1 1l5 5 5-5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 8px;
+}
+.status-select:focus {
+  outline: none;
+  border-color: #8aa9ff;
+  box-shadow: 0 0 0 3px rgba(77, 133, 255, 0.2);
+}
