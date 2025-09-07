@@ -112,6 +112,16 @@ def require_admin(secret: Optional[str]):
     if got != expected:
         raise HTTPException(status_code=401, detail="Unauthorized (bad admin secret)")
 
+from datetime import datetime, timedelta
+
+def cleanup_old_requests(db: Session):
+    cutoff = datetime.utcnow() - timedelta(days=15)
+    db.query(Booking).filter(
+        Booking.status.in_(["cancelled", "rejected"]),
+        Booking.decision_at < cutoff
+    ).delete(synchronize_session=False)
+    db.commit()
+
 # --- routes ---
 @app.api_route("/api/health" ,methods=["GET", "HEAD"])
 def health():
@@ -236,3 +246,10 @@ def cancel_request(
     db.commit()
     db.refresh(row)
     return row
+
+@app.post("/api/admin/cleanup")
+def run_cleanup(x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
+                db: Session = Depends(get_db)):
+    require_admin(x_admin_secret)
+    cleanup_old_requests(db)
+    return {"ok": True, "message": "Old cancelled/rejected requests cleaned up"}
