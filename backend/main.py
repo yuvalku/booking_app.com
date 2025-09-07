@@ -113,7 +113,7 @@ def require_admin(secret: Optional[str]):
         raise HTTPException(status_code=401, detail="Unauthorized (bad admin secret)")
 
 # --- routes ---
-@app.get("/api/health")
+@app.api_route("/api/health" ,methods=["GET", "HEAD"])
 def health():
     return {"ok": True, "time": datetime.utcnow().isoformat()}
 
