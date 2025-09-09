@@ -189,7 +189,7 @@ def create_request(
 
     return row
 
-@app.get("/api/bookings/approve", response_model=List[BookingOut])
+@app.get("/api/bookings/approved", response_model=List[BookingOut])
 def approved_bookings(db: Session = Depends(get_db)):
     return (
         db.query(Booking)
