@@ -113,7 +113,7 @@ class BookingIn(BaseModel):
 class BookingOut(BaseModel):
     id: int
     requester_name: str
-    requester_email: str
+    requester_email: Optional[str]
     start_date: date
     end_date: date
     status: Status
