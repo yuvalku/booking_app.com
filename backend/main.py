@@ -62,7 +62,7 @@ class Booking(Base):
     __tablename__ = "bookings"
     id = Column(Integer, primary_key=True)
     requester_name = Column(String, nullable=False)
-    requester_email = Column(String, nullable=True)
+    requester_email = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)   # inclusive
     end_date = Column(Date, nullable=False)     # exclusive (checkout day)
     status = Column(String, default="pending", nullable=False)  # pending/approved/rejected/cancelled
@@ -91,7 +91,7 @@ class Status(str, Enum):
 
 class BookingIn(BaseModel):
     requester_name: str
-    requester_email: Optional[EmailStr] = None
+    requester_email: EmailStr
     start_date: date     # inclusive
     end_date: date       # exclusive (checkout day)
     notes: Optional[str] = None
@@ -209,6 +209,7 @@ def approved_bookings(db: Session = Depends(get_db)):
 def approve_request(
     req_id: int,
     db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
 ):
     require_admin(x_admin_secret)
@@ -234,12 +235,23 @@ def approve_request(
     row.decided_by = "Mom"
     db.commit()
     db.refresh(row)
+
+    # ✉️ Notify requester
+    if background_tasks:
+        subject = "✅ Your booking has been approved"
+        body = (
+            f"Hi {row.requester_name},\n\n"
+            f"Your booking request for {row.start_date} → {row.end_date} has been approved.\n"
+        )
+        background_tasks.add_task(send_email, row.requester_email, subject, body)
+
     return row
 
 @app.post("/api/requests/{req_id}/reject", response_model=BookingOut)
 def reject_request(
     req_id: int,
     db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
 ):
     require_admin(x_admin_secret)
@@ -255,6 +267,16 @@ def reject_request(
     row.decided_by = "Mom"
     db.commit()
     db.refresh(row)
+
+    # ✉️ Notify requester
+    if background_tasks:
+        subject = "✅ Your booking has been approved"
+        body = (
+            f"Hi {row.requester_name},\n\n"
+            f"Your booking request for {row.start_date} → {row.end_date} has been rejected.\n"
+        )
+        background_tasks.add_task(send_email, row.requester_email, subject, body)
+        
     return row
 
 @app.post("/api/requests/{req_id}/cancel", response_model=BookingOut)
@@ -262,6 +284,7 @@ def cancel_request(
     req_id: int,
     payload: CancelIn | None = None,
     db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
 ):
     require_admin(x_admin_secret)
@@ -279,6 +302,16 @@ def cancel_request(
         row.notes = (row.notes or "") + f"\n[Cancelled]: {payload.reason}"
     db.commit()
     db.refresh(row)
+
+    # ✉️ Notify requester
+    if background_tasks:
+        subject = "✅ Your booking has been approved"
+        body = (
+            f"Hi {row.requester_name},\n\n"
+            f"Your booking request for {row.start_date} → {row.end_date} has been cancelled.\n"
+        )
+        background_tasks.add_task(send_email, row.requester_email, subject, body)
+        
     return row
 
 @app.on_event("startup")
