@@ -116,8 +116,8 @@ class BookingOut(BaseModel):
     class Config:
         from_attributes = True  # pydantic v2
 
-class CancelIn(BaseModel):
-    reason: Optional[str] = None
+# class CancelIn(BaseModel):
+#     reason: Optional[str] = None
 
 # --- helpers ---
 def overlaps(a_start: date, a_end: date, b_start: date, b_end: date) -> bool:
@@ -282,7 +282,7 @@ def reject_request(
 @app.post("/api/requests/{req_id}/cancel", response_model=BookingOut)
 def cancel_request(
     req_id: int,
-    payload: CancelIn | None = None,
+    # payload: CancelIn | None = None,
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
@@ -298,8 +298,8 @@ def cancel_request(
     row.status = "cancelled"
     row.decision_at = datetime.utcnow()
     row.decided_by = "Mom"
-    if payload and payload.reason:
-        row.notes = (row.notes or "") + f"\n[Cancelled]: {payload.reason}"
+    # if payload and payload.reason:
+    #     row.notes = (row.notes or "") + f"\n[Cancelled]: {payload.reason}"
     db.commit()
     db.refresh(row)
 
