@@ -188,6 +188,21 @@ def create_request(
         )
 
     return row
+@app.get("/api/requests", response_model=List[BookingOut])
+def list_requests(
+    status: Optional[Status] = Query(default=None),
+    active: Optional[bool] = Query(default=None),
+    db: Session = Depends(get_db),
+    x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
+):
+    require_admin(x_admin_secret)  # only admin can see requests
+    q = db.query(Booking)
+    if active:
+        q = q.filter(Booking.status.in_(("pending", "approved")))
+    elif status:
+        q = q.filter(Booking.status == status.value)
+    return q.order_by(Booking.start_date.asc(), Booking.id.asc()).all()
+
 
 @app.get("/api/bookings/approved", response_model=List[BookingOut])
 def approved_bookings(db: Session = Depends(get_db)):
