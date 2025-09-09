@@ -21,7 +21,7 @@ export default function BookingPage() {
 
   // fetch ONLY approved bookings
   const loadApproved = async () => {
-    const r = await fetch(`${API_BASE}/api/bookings/approved`);
+    const r = await fetch(`${API_BASE}/api/bookings/approve`);
     setApproved(await r.json());
   };
 

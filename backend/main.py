@@ -189,7 +189,16 @@ def create_request(
 
     return row
 
-@app.post("/api/requests/{req_id}/approved", response_model=BookingOut)
+@app.get("/api/bookings/approved", response_model=List[BookingOut])
+def approved_bookings(db: Session = Depends(get_db)):
+    return (
+        db.query(Booking)
+        .filter(Booking.status == "approved")
+        .order_by(Booking.start_date.asc(), Booking.id.asc())
+        .all()
+    )
+
+@app.post("/api/requests/{req_id}/approve", response_model=BookingOut)
 def approve_request(
     req_id: int,
     db: Session = Depends(get_db),
