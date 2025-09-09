@@ -45,7 +45,7 @@ app.add_middleware(
 # --- Email Config ---
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "youraddress@gmail.com")
 SENDER_PASS = os.getenv("SENDER_PASS", "app_password")  # Gmail App Password
-NOTIFY_EMAIL = "yuvalspam765@gmail.com"
+NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", "yuvalspam765@gmail.com")
 
 def send_email(to_email: str, subject: str, body: str):
     msg = MIMEText(body, "plain")
