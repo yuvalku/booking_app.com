@@ -70,8 +70,8 @@ class Booking(Base):
     id = Column(Integer, primary_key=True)
     requester_name = Column(String, nullable=False)
     requester_email = Column(String, nullable=False)
-    start_date = Column(Date, nullable=False)   # inclusive
-    end_date = Column(Date, nullable=False)     # exclusive
+    start_date = Column(Date, nullable=False)   
+    end_date = Column(Date, nullable=False)    
     status = Column(String, default="pending", nullable=False)
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
