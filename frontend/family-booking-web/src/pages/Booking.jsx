@@ -95,7 +95,7 @@
         requester_email: me.email.trim() || null,
         notes: me.notes.trim() || null,
         start_date: toISO(range.from),
-        end_date: toISO(addDays(range.to, 1)), // checkout day (exclusive)
+        end_date: toISO(addDays(range.to, 0)),
       };
 
       try {
@@ -115,7 +115,7 @@
 
     const selectedLabel =
       range.from && range.to
-        ? `${formatDMY(range.from)} → ${formatDMY(addDays(range.to, 1))} (checkout)`
+        ? `${formatDMY(range.from)} → ${formatDMY(addDays(range.to, 0))}`
         : "—";
 
     return (
@@ -151,7 +151,7 @@
               <br />
               <b>Dates: </b>
               <span style={{ color: "#666" }}>
-                {formatDMY(hover.from)} → {formatDMY(addDays(hover.to))}
+                {formatDMY(hover.from)} → {formatDMY(addDays(hover.to,0))}
               </span>
             </div>
           ) : (

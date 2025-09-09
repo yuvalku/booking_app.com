@@ -173,7 +173,7 @@ def create_request(
             f"A new booking request has been submitted.\n\n"
             f"Name: {row.requester_name}\n"
             f"Email: {row.requester_email}\n"
-            f"Dates: {row.start_date} → {row.end_date} (checkout)\n"
+            f"Dates: {row.start_date} → {row.end_date}\n"
             f"Notes: {row.notes or '-'}\n"
             f"Status: {row.status}\n"
         )
