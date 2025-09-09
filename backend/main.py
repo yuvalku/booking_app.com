@@ -189,7 +189,7 @@ def create_request(
 
     return row
 
-@app.post("/api/requests/{req_id}/approve", response_model=BookingOut)
+@app.post("/api/requests/{req_id}/approved", response_model=BookingOut)
 def approve_request(
     req_id: int,
     db: Session = Depends(get_db),
