@@ -20,12 +20,13 @@ load_dotenv()
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "changeme")
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*")
 
+# Use Neon Postgres in prod (DATABASE_URL), fallback to local SQLite in dev
 DB_URL = os.getenv("DATABASE_URL", "sqlite:///./family_bookings.db")
 
 engine = create_engine(
     DB_URL,
     connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {},
-    pool_pre_ping=True,
+    pool_pre_ping=True,  # helpful for serverless Postgres (Neon)
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
@@ -42,23 +43,15 @@ app.add_middleware(
 )
 
 # --- Email Config ---
-SENDER_EMAIL = os.getenv("SENDER_EMAIL", "yuvalspam765@gmail.com")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "youraddress@gmail.com")
 SENDER_PASS = os.getenv("SENDER_PASS", "app_password")  # Gmail App Password
-NOTIFY_EMAIL = "yuvalspam765@gmail.com"  # mom’s email
+NOTIFY_EMAIL = "yuvalspam765@gmail.com"
 
-def send_email(
-    to_email: str,
-    subject: str,
-    body: str,
-    from_name: str = "Booking System",
-    reply_to: Optional[str] = None,
-):
+def send_email(to_email: str, subject: str, body: str):
     msg = MIMEText(body, "plain")
     msg["Subject"] = subject
-    msg["From"] = f"{from_name} <{SENDER_EMAIL}>"
+    msg["From"] = SENDER_EMAIL
     msg["To"] = to_email
-    if reply_to:
-        msg["Reply-To"] = reply_to
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(SENDER_EMAIL, SENDER_PASS)
@@ -69,15 +62,16 @@ class Booking(Base):
     __tablename__ = "bookings"
     id = Column(Integer, primary_key=True)
     requester_name = Column(String, nullable=False)
-    requester_email = Column(String, nullable=False)
-    start_date = Column(Date, nullable=False)   
-    end_date = Column(Date, nullable=False)    
-    status = Column(String, default="pending", nullable=False)
+    requester_email = Column(String, nullable=True)
+    start_date = Column(Date, nullable=False)   # inclusive
+    end_date = Column(Date, nullable=False)     # exclusive (checkout day)
+    status = Column(String, default="pending", nullable=False)  # pending/approved/rejected/cancelled
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     decision_at = Column(DateTime, nullable=True)
     decided_by = Column(String, nullable=True)
 
+# create tables if they don't exist
 Base.metadata.create_all(engine)
 
 # --- DI session ---
@@ -97,9 +91,9 @@ class Status(str, Enum):
 
 class BookingIn(BaseModel):
     requester_name: str
-    requester_email: EmailStr
-    start_date: date
-    end_date: date
+    requester_email: Optional[EmailStr] = None
+    start_date: date     # inclusive
+    end_date: date       # exclusive (checkout day)
     notes: Optional[str] = None
 
     @field_validator("end_date")
@@ -120,12 +114,16 @@ class BookingOut(BaseModel):
     notes: Optional[str]
 
     class Config:
-        from_attributes = True
+        from_attributes = True  # pydantic v2
 
 class CancelIn(BaseModel):
     reason: Optional[str] = None
 
 # --- helpers ---
+def overlaps(a_start: date, a_end: date, b_start: date, b_end: date) -> bool:
+    # end is exclusive
+    return (a_end > b_start) and (b_end > a_start)
+
 def require_admin(secret: Optional[str]):
     expected = (ADMIN_SECRET or "").strip()
     got = (secret or "").strip()
@@ -141,7 +139,7 @@ def cleanup_old_requests(db: Session):
     db.commit()
 
 # --- routes ---
-@app.api_route("/api/health", methods=["GET", "HEAD"])
+@app.api_route("/api/health" ,methods=["GET", "HEAD"])
 def health():
     return {"ok": True, "time": datetime.utcnow().isoformat()}
 
@@ -158,7 +156,7 @@ def create_request(
 ):
     row = Booking(
         requester_name=payload.requester_name.strip(),
-        requester_email=payload.requester_email,
+        requester_email=(payload.requester_email or None),
         start_date=payload.start_date,
         end_date=payload.end_date,
         status="pending",
@@ -168,26 +166,21 @@ def create_request(
     db.commit()
     db.refresh(row)
 
-    # Notify mom (from requester, with reply-to)
+    # ---- Email notification ----
     if background_tasks:
         subject = f"📅 New Booking Request from {row.requester_name}"
         body = (
-            f"New booking request:\n\n"
+            f"A new booking request has been submitted.\n\n"
             f"Name: {row.requester_name}\n"
             f"Email: {row.requester_email}\n"
-            f"Dates: {row.start_date} → {row.end_date}\n"
+            f"Dates: {row.start_date} → {row.end_date} (checkout)\n"
             f"Notes: {row.notes or '-'}\n"
+            f"Status: {row.status}\n"
         )
-        background_tasks.add_task(
-            send_email,
-            to_email=NOTIFY_EMAIL,
-            subject=subject,
-            body=body,
-            from_name=row.requester_name,
-            reply_to=row.requester_email,
-        )
+        background_tasks.add_task(send_email, NOTIFY_EMAIL, subject, body)
 
     return row
+
 @app.get("/api/requests", response_model=List[BookingOut])
 def list_requests(
     status: Optional[Status] = Query(default=None),
@@ -203,7 +196,6 @@ def list_requests(
         q = q.filter(Booking.status == status.value)
     return q.order_by(Booking.start_date.asc(), Booking.id.asc()).all()
 
-
 @app.get("/api/bookings/approved", response_model=List[BookingOut])
 def approved_bookings(db: Session = Depends(get_db)):
     return (
@@ -217,10 +209,10 @@ def approved_bookings(db: Session = Depends(get_db)):
 def approve_request(
     req_id: int,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
 ):
     require_admin(x_admin_secret)
+
     row = db.get(Booking, req_id)
     if not row:
         raise HTTPException(404, "Request not found")
@@ -242,31 +234,16 @@ def approve_request(
     row.decided_by = "Mom"
     db.commit()
     db.refresh(row)
-
-    # Notify requester
-    if background_tasks:
-        subject = "✅ Your booking has been approved"
-        body = (
-            f"Hi {row.requester_name},\n\n"
-            f"Your booking request for {row.start_date} → {row.end_date} has been approved.\n"
-        )
-        background_tasks.add_task(
-            send_email,
-            to_email=row.requester_email,
-            subject=subject,
-            body=body,
-            from_name="Mom",
-        )
     return row
 
 @app.post("/api/requests/{req_id}/reject", response_model=BookingOut)
 def reject_request(
     req_id: int,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
 ):
     require_admin(x_admin_secret)
+
     row = db.get(Booking, req_id)
     if not row:
         raise HTTPException(404, "Request not found")
@@ -278,22 +255,6 @@ def reject_request(
     row.decided_by = "Mom"
     db.commit()
     db.refresh(row)
-
-    # Notify requester
-    if background_tasks:
-        subject = "❌ Your booking has been rejected"
-        body = (
-            f"Hi {row.requester_name},\n\n"
-            f"Unfortunately your booking request for {row.start_date} → {row.end_date} "
-            f"has been rejected.\n"
-        )
-        background_tasks.add_task(
-            send_email,
-            to_email=row.requester_email,
-            subject=subject,
-            body=body,
-            from_name="Mom",
-        )
     return row
 
 @app.post("/api/requests/{req_id}/cancel", response_model=BookingOut)
@@ -301,10 +262,10 @@ def cancel_request(
     req_id: int,
     payload: CancelIn | None = None,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None,
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
 ):
     require_admin(x_admin_secret)
+
     row = db.get(Booking, req_id)
     if not row:
         raise HTTPException(404, "Request not found")
@@ -318,22 +279,6 @@ def cancel_request(
         row.notes = (row.notes or "") + f"\n[Cancelled]: {payload.reason}"
     db.commit()
     db.refresh(row)
-
-    # Notify requester
-    if background_tasks:
-        subject = "⚠️ Your booking has been cancelled"
-        body = (
-            f"Hi {row.requester_name},\n\n"
-            f"Your approved booking for {row.start_date} → {row.end_date} "
-            f"has been cancelled.\n"
-        )
-        background_tasks.add_task(
-            send_email,
-            to_email=row.requester_email,
-            subject=subject,
-            body=body,
-            from_name="Mom",
-        )
     return row
 
 @app.on_event("startup")
