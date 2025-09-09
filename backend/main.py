@@ -1,15 +1,18 @@
 # backend/main.py
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import os
 from enum import Enum
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import Column, Date, DateTime, Integer, String, create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+
+import smtplib
+from email.mime.text import MIMEText
 
 # --- config & DB engine ---
 load_dotenv()
@@ -38,6 +41,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Email Config ---
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "youraddress@gmail.com")
+SENDER_PASS = os.getenv("SENDER_PASS", "app_password")  # Gmail App Password
+NOTIFY_EMAIL = "yuvalspam765@gmail.com"
+
+def send_email(to_email: str, subject: str, body: str):
+    msg = MIMEText(body, "plain")
+    msg["Subject"] = subject
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = to_email
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(SENDER_EMAIL, SENDER_PASS)
+        server.send_message(msg)
 
 # --- DB Model ---
 class Booking(Base):
@@ -112,8 +130,6 @@ def require_admin(secret: Optional[str]):
     if got != expected:
         raise HTTPException(status_code=401, detail="Unauthorized (bad admin secret)")
 
-from datetime import datetime, timedelta
-
 def cleanup_old_requests(db: Session):
     cutoff = datetime.utcnow() - timedelta(days=15)
     db.query(Booking).filter(
@@ -133,7 +149,11 @@ def admin_verify(x_admin_secret: Optional[str] = Header(default=None, alias="X-A
     return {"ok": True}
 
 @app.post("/api/requests", response_model=BookingOut)
-def create_request(payload: BookingIn, db: Session = Depends(get_db)):
+def create_request(
+    payload: BookingIn,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+):
     row = Booking(
         requester_name=payload.requester_name.strip(),
         requester_email=(payload.requester_email or None),
@@ -145,6 +165,20 @@ def create_request(payload: BookingIn, db: Session = Depends(get_db)):
     db.add(row)
     db.commit()
     db.refresh(row)
+
+    # ---- Email notification ----
+    if background_tasks:
+        subject = f"📅 New Booking Request from {row.requester_name}"
+        body = (
+            f"A new booking request has been submitted.\n\n"
+            f"Name: {row.requester_name}\n"
+            f"Email: {row.requester_email}\n"
+            f"Dates: {row.start_date} → {row.end_date} (checkout)\n"
+            f"Notes: {row.notes or '-'}\n"
+            f"Status: {row.status}\n"
+        )
+        background_tasks.add_task(send_email, NOTIFY_EMAIL, subject, body)
+
     return row
 
 @app.get("/api/requests", response_model=List[BookingOut])
@@ -247,9 +281,13 @@ def cancel_request(
     db.refresh(row)
     return row
 
-@app.post("/api/admin/cleanup")
-def run_cleanup(x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
-                db: Session = Depends(get_db)):
-    require_admin(x_admin_secret)
-    cleanup_old_requests(db)
-    return {"ok": True, "message": "Old cancelled/rejected requests cleaned up"}
+@app.on_event("startup")
+def startup_cleanup():
+    db = SessionLocal()
+    try:
+        cleanup_old_requests(db)
+        print("✅ Startup cleanup complete")
+    except Exception as e:
+        print(f"❌ Startup cleanup error: {e}")
+    finally:
+        db.close()
