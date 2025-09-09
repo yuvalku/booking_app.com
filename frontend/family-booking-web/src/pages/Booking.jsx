@@ -151,7 +151,7 @@
               <br />
               <b>Dates: </b>
               <span style={{ color: "#666" }}>
-                {formatDMY(hover.from)} → {formatDMY(addDays(hover.to, 1))}
+                {formatDMY(hover.from)} → {formatDMY(addDays(hover.to))}
               </span>
             </div>
           ) : (
@@ -172,7 +172,7 @@
             />
           </label>
           <label>
-            Email
+            Email*
             <input
               type="email"
               value={me.email}

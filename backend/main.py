@@ -63,8 +63,8 @@ class Booking(Base):
     id = Column(Integer, primary_key=True)
     requester_name = Column(String, nullable=False)
     requester_email = Column(String, nullable=False)
-    start_date = Column(Date, nullable=False)   # inclusive
-    end_date = Column(Date, nullable=False)     # exclusive (checkout day)
+    start_date = Column(Date, nullable=False) 
+    end_date = Column(Date, nullable=False)   
     status = Column(String, default="pending", nullable=False)  # pending/approved/rejected/cancelled
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -92,8 +92,8 @@ class Status(str, Enum):
 class BookingIn(BaseModel):
     requester_name: str
     requester_email: EmailStr
-    start_date: date     # inclusive
-    end_date: date       # exclusive (checkout day)
+    start_date: date     
+    end_date: date       
     notes: Optional[str] = None
 
     @field_validator("end_date")
@@ -121,7 +121,7 @@ class CancelIn(BaseModel):
 
 # --- helpers ---
 def overlaps(a_start: date, a_end: date, b_start: date, b_end: date) -> bool:
-    # end is exclusive
+    
     return (a_end > b_start) and (b_end > a_start)
 
 def require_admin(secret: Optional[str]):
@@ -168,7 +168,7 @@ def create_request(
 
     # ---- Email notification ----
     if background_tasks:
-        subject = f"📅 New Booking Request from {row.requester_name}"
+        subject = f"🔔 New Booking Request from {row.requester_name}"
         body = (
             f"A new booking request has been submitted.\n\n"
             f"Name: {row.requester_name}\n"
@@ -238,7 +238,7 @@ def approve_request(
 
     # ✉️ Notify requester
     if background_tasks:
-        subject = "✅ Your booking has been approved"
+        subject = "🎉 Your booking has been approved"
         body = (
             f"Hi {row.requester_name},\n\n"
             f"Your booking request for {row.start_date} → {row.end_date} has been approved.\n"
@@ -270,7 +270,7 @@ def reject_request(
 
     # ✉️ Notify requester
     if background_tasks:
-        subject = "✅ Your booking has been approved"
+        subject = "❌ Your booking has been rejected"
         body = (
             f"Hi {row.requester_name},\n\n"
             f"Your booking request for {row.start_date} → {row.end_date} has been rejected.\n"
@@ -305,7 +305,7 @@ def cancel_request(
 
     # ✉️ Notify requester
     if background_tasks:
-        subject = "✅ Your booking has been approved"
+        subject = "⚠️ Your booking has been cancelled"
         body = (
             f"Hi {row.requester_name},\n\n"
             f"Your booking request for {row.start_date} → {row.end_date} has been cancelled.\n"
