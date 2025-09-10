@@ -175,7 +175,7 @@ def create_request(
             f"Email: {row.requester_email}\n"
             f"Dates: {row.start_date} → {row.end_date}\n"
             f"Notes: {row.notes or '-'}\n"
-            f"Status: {row.status}\n"
+            f"Status: {row.status}\n\n"
             f"For managing requests: https://booking-app-com.onrender.com/admin\n"
         )
         background_tasks.add_task(send_email, NOTIFY_EMAIL, subject, body)
