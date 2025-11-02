@@ -41,7 +41,7 @@
       () =>
         approved.map((b) => ({
           from: fromISO(b.start_date),
-          to: addDays(fromISO(b.end_date), -1), // end is exclusive
+          to: addDays(fromISO(b.end_date), 0), // end is inclusive
         })),
       [approved]
     );
@@ -51,7 +51,7 @@
       () =>
         approved.map((b) => ({
           from: fromISO(b.start_date),
-          to: addDays(fromISO(b.end_date), -1),
+          to: addDays(fromISO(b.end_date), 0),
           name: b.requester_name,
         })),
       [approved]
